@@ -1,98 +1,175 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useEffect, useState, useCallback } from 'react';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import * as Network from 'expo-network';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { TaskItem } from '../../src/components/task-item';
+import { ThemedText } from '../../components/themed-text';
+import { ThemedView } from '../../components/themed-view';
+import { useAppDispatch, useAppSelector } from '../../src/store/hooks';
+import { initializeTasksAsync, saveTaskAsync, deleteTaskAsync, syncTasksAsync } from '../../src/store/tasksSlice';
+import { signOutAsync } from '../../src/store/authSlice';
+import type { Task } from '../../src/types';
 
-export default function HomeScreen() {
+export default function TaskListScreen() {
+  const router = useRouter();
+  const dispatch = useAppDispatch();
+  const { userId } = useAppSelector((state) => state.auth);
+  const { tasks, status, syncing, error } = useAppSelector((state) => state.tasks);
+  const [isOnline, setIsOnline] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+
+    dispatch(initializeTasksAsync(userId));
+  }, [dispatch, userId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function handleConnectivity() {
+      const networkState = await Network.getNetworkStateAsync();
+      const connected = networkState.isInternetReachable ?? networkState.isConnected ?? false;
+
+      if (!isMounted) {
+        return;
+      }
+
+      setIsOnline(connected);
+
+      if (connected && userId) {
+        dispatch(syncTasksAsync(userId));
+      }
+    }
+
+    handleConnectivity();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [dispatch, userId]);
+
+  const onToggleTask = useCallback(
+    (taskId: string, completed: boolean) => {
+      const task = tasks.find((item: Task) => item.id === taskId);
+
+      if (!task || !userId) {
+        return;
+      }
+
+      dispatch(saveTaskAsync({
+        task: {
+          ...task,
+          completed,
+          updatedAt: new Date().toISOString(),
+          synced: false,
+        },
+        ownerId: userId,
+      }));
+    },
+    [dispatch, tasks, userId]
+  );
+
+  const onDeleteTask = useCallback(
+    (taskId: string) => {
+      if (!userId) {
+        return;
+      }
+
+      dispatch(deleteTaskAsync({ taskId, ownerId: userId }));
+    },
+    [dispatch, userId]
+  );
+
+  const onEditTask = useCallback(
+    (taskId: string) => {
+      router.push(`/task-form?taskId=${taskId}`);
+    },
+    [router]
+  );
+
+  const onAddTask = useCallback(() => {
+    router.push('/task-form');
+  }, [router]);
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <ThemedView style={styles.page}>
+      <View style={styles.header}>
+        <ThemedText type="title">Tasks</ThemedText>
+        <ThemedText>{isOnline ? 'Online' : 'Offline'}</ThemedText>
+      </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      <View style={styles.statusBar}>
+        <ThemedText>{status === 'loading' ? 'Loading tasks…' : syncing ? 'Syncing changes…' : 'Ready'}</ThemedText>
+        {error ? <ThemedText style={styles.error}>{error}</ThemedText> : null}
+      </View>
+
+      <FlatList<Task>
+        data={tasks}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <TaskItem
+            task={item}
+            onToggle={(completed: boolean) => onToggleTask(item.id, completed)}
+            onEdit={() => onEditTask(item.id)}
+            onDelete={() => onDeleteTask(item.id)}
+          />
+        )}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <ThemedText>No tasks yet. Tap Add Task to create your first task.</ThemedText>
+          </View>
+        }
+        initialNumToRender={8}
+        windowSize={10}
+        removeClippedSubviews
+        getItemLayout={(_, index) => ({ length: 96, offset: 96 * index, index })}
+        contentContainerStyle={styles.listContent}
+      />
+
+      <View style={styles.footer}>
+        <Pressable style={styles.primaryButton} onPress={onAddTask}>
+          <ThemedText type="defaultSemiBold">+ Add Task</ThemedText>
+        </Pressable>
+      </View>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  page: {
+    flex: 1,
+    padding: 16,
+  },
+  header: {
+    marginBottom: 12,
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  statusBar: {
+    paddingVertical: 8,
+    gap: 4,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  error: {
+    color: '#d64545',
+  },
+  emptyContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  footer: {
+    paddingVertical: 16,
+  },
+  primaryButton: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#0a7ea4',
+    alignItems: 'center',
+  },
+  listContent: {
+    paddingBottom: 16,
   },
 });

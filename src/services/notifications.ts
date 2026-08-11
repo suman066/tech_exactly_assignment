@@ -1,26 +1,42 @@
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 
-import type { Task } from '@/types';
+import type { Task } from '../types';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
-});
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+let notificationHandlerConfigured = false;
 
-export async function registerForPushNotificationsAsync(): Promise<string | null> {
-  if (!Device.isDevice) {
+function getNotifications() {
+  if (isExpoGo) {
     return null;
   }
 
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  const notifications = require('expo-notifications') as typeof import('expo-notifications');
+  if (!notificationHandlerConfigured) {
+    notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      }),
+    });
+    notificationHandlerConfigured = true;
+  }
+  return notifications;
+}
+
+export async function registerForPushNotificationsAsync(): Promise<string | null> {
+  const notifications = getNotifications();
+  if (!Device.isDevice || !notifications) {
+    return null;
+  }
+
+  const { status: existingStatus } = await notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
 
   if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
+    const { status } = await notifications.requestPermissionsAsync();
     finalStatus = status;
   }
 
@@ -28,12 +44,13 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     return null;
   }
 
-  const token = (await Notifications.getExpoPushTokenAsync()).data;
+  const token = (await notifications.getExpoPushTokenAsync()).data;
   return token;
 }
 
 export async function scheduleTaskReminder(task: Task): Promise<string | undefined> {
-  if (!task.reminder) {
+  const notifications = getNotifications();
+  if (!task.reminder || !notifications) {
     return undefined;
   }
 
@@ -43,22 +60,26 @@ export async function scheduleTaskReminder(task: Task): Promise<string | undefin
     return undefined;
   }
 
-  const notificationId = await Notifications.scheduleNotificationAsync({
+  const notificationId = await notifications.scheduleNotificationAsync({
     content: {
       title: 'Task Reminder',
       body: task.title,
       data: { taskId: task.id },
     },
-    trigger: reminderDate,
+    trigger: {
+      type: notifications.SchedulableTriggerInputTypes.DATE,
+      date: reminderDate,
+    },
   });
 
   return notificationId;
 }
 
 export function cancelScheduledReminder(notificationId?: string): Promise<void> {
-  if (!notificationId) {
+  const notifications = getNotifications();
+  if (!notificationId || !notifications) {
     return Promise.resolve();
   }
 
-  return Notifications.cancelScheduledNotificationAsync(notificationId);
+  return notifications.cancelScheduledNotificationAsync(notificationId);
 }

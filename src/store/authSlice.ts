@@ -6,8 +6,8 @@ import {
   User,
 } from 'firebase/auth';
 
-import { auth } from '@/services/firebase';
-import type { UserProfile } from '@/types';
+import { auth } from '../services/firebase';
+import type { UserProfile } from '../types';
 
 export interface AuthState {
   userId: string | null;
