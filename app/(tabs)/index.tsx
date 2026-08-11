@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Network from 'expo-network';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TaskItem } from '../../src/components/task-item';
 import { ThemedText } from '../../components/themed-text';
@@ -14,7 +15,7 @@ import type { Task } from '../../src/types';
 export default function TaskListScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { userId } = useAppSelector((state) => state.auth);
+  const { userId, email, status: authStatus } = useAppSelector((state) => state.auth);
   const { tasks, status, syncing, error } = useAppSelector((state) => state.tasks);
   const [isOnline, setIsOnline] = useState<boolean>(false);
 
@@ -94,11 +95,27 @@ export default function TaskListScreen() {
     router.push('/task-form');
   }, [router]);
 
+  const onSignOut = useCallback(() => {
+    dispatch(signOutAsync());
+  }, [dispatch]);
+
   return (
-    <ThemedView style={styles.page}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <ThemedView style={styles.page}>
       <View style={styles.header}>
-        <ThemedText type="title">Tasks</ThemedText>
-        <ThemedText>{isOnline ? 'Online' : 'Offline'}</ThemedText>
+        <View>
+          <ThemedText type="title">Tasks</ThemedText>
+          {email ? <ThemedText style={styles.accountEmail}>{email}</ThemedText> : null}
+        </View>
+        <View style={styles.headerActions}>
+          <ThemedText>{isOnline ? 'Online' : 'Offline'}</ThemedText>
+          <Pressable
+            style={[styles.logoutButton, authStatus === 'loading' && styles.logoutButtonDisabled]}
+            onPress={onSignOut}
+            disabled={authStatus === 'loading'}>
+            <ThemedText style={styles.logoutText}>{authStatus === 'loading' ? 'Logging out…' : 'Log out'}</ThemedText>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.statusBar}>
@@ -134,11 +151,15 @@ export default function TaskListScreen() {
           <ThemedText type="defaultSemiBold">+ Add Task</ThemedText>
         </Pressable>
       </View>
-    </ThemedView>
+      </ThemedView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
   page: {
     flex: 1,
     padding: 16,
@@ -148,6 +169,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  headerActions: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  accountEmail: {
+    marginTop: 2,
+    color: '#667085',
+  },
+  logoutButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: '#d64545',
+    borderRadius: 8,
+  },
+  logoutButtonDisabled: {
+    opacity: 0.65,
+  },
+  logoutText: {
+    color: '#d64545',
   },
   statusBar: {
     paddingVertical: 8,

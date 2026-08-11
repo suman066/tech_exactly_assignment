@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import React, { useEffect } from 'react';
 import { Provider } from 'react-redux';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { store } from '../src/store/store';
 import { useAppSelector } from '../src/store/hooks';
@@ -35,9 +36,11 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   return (
-    <Provider store={store}>
-      <AuthStateListener />
-      <RootLayoutNav />
-    </Provider>
+    <SafeAreaProvider>
+      <Provider store={store}>
+        <AuthStateListener />
+        <RootLayoutNav />
+      </Provider>
+    </SafeAreaProvider>
   );
 }

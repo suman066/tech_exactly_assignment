@@ -15,5 +15,5 @@ const { getReactNativePersistence } = require('@firebase/auth/dist/rn/index.js')
 export const auth = initializeAuth(firebaseApp, {
   persistence: getReactNativePersistence(AsyncStorage),
 });
-export const firestore = getFirestore(firebaseApp);
+export const firestore = getFirestore(firebaseApp, 'myapp-c276f');
 export { FirebaseError };

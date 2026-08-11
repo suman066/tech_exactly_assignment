@@ -2,6 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   query,
   setDoc,
@@ -14,10 +15,19 @@ const taskCollection = (userId: string) => collection(firestore, 'users', userId
 const taskDocument = (userId: string, taskId: string) => doc(taskCollection(userId), taskId);
 
 export async function uploadTask(userId: string, task: Task): Promise<void> {
-  await setDoc(taskDocument(userId, task.id), {
-    ...task,
+  const remoteTask = {
+    id: task.id,
+    ownerId: userId,
+    title: task.title,
+    completed: task.completed,
+    updatedAt: task.updatedAt,
     synced: true,
-  });
+    ...(task.notes !== undefined ? { notes: task.notes } : {}),
+    ...(task.reminder !== undefined ? { reminder: task.reminder } : {}),
+    ...(task.notificationId !== undefined ? { notificationId: task.notificationId } : {}),
+  };
+
+  await setDoc(taskDocument(userId, task.id), remoteTask);
 }
 
 export async function deleteRemoteTask(userId: string, taskId: string): Promise<void> {
@@ -41,4 +51,22 @@ export async function fetchRemoteTasks(userId: string): Promise<Task[]> {
       updatedAt: data.updatedAt ?? new Date().toISOString(),
     };
   });
+}
+
+export async function saveUserPushToken(userId: string, token: string): Promise<void> {
+  const userDoc = doc(firestore, 'users', userId);
+  await setDoc(userDoc, { pushToken: token }, { merge: true });
+}
+
+export async function fetchUserPushToken(userId: string): Promise<string | null> {
+  const userDoc = doc(firestore, 'users', userId);
+  const snapshot = await getDoc(userDoc);
+  if (!snapshot.exists()) return null;
+  const data = snapshot.data() as any;
+  return (data?.pushToken as string) ?? null;
+}
+
+export async function removeUserPushToken(userId: string): Promise<void> {
+  const userDoc = doc(firestore, 'users', userId);
+  await setDoc(userDoc, { pushToken: null }, { merge: true });
 }

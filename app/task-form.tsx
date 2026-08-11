@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { format } from 'date-fns';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAppDispatch, useAppSelector } from '../src/store/hooks';
 import { saveTaskAsync } from '../src/store/tasksSlice';
@@ -24,7 +26,42 @@ export default function TaskFormScreen() {
 
   const [title, setTitle] = useState(editingTask?.title ?? '');
   const [notes, setNotes] = useState(editingTask?.notes ?? '');
-  const [reminder, setReminder] = useState(editingTask?.reminder ?? '');
+  const [reminderDate, setReminderDate] = useState<Date | null>(() => {
+    if (!editingTask?.reminder) {
+      return null;
+    }
+
+    const date = new Date(editingTask.reminder);
+    return Number.isNaN(date.getTime()) ? null : date;
+  });
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
+  const updateReminderDate = (selectedDate: Date, mode: 'date' | 'time') => {
+    const nextReminder = new Date(reminderDate ?? new Date());
+
+    if (mode === 'date') {
+      nextReminder.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+    } else {
+      nextReminder.setHours(selectedDate.getHours(), selectedDate.getMinutes(), 0, 0);
+    }
+
+    setReminderDate(nextReminder);
+  };
+
+  const onDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (event.type === 'set' && selectedDate) {
+      updateReminderDate(selectedDate, 'date');
+    }
+  };
+
+  const onTimeChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    setShowTimePicker(false);
+    if (event.type === 'set' && selectedDate) {
+      updateReminderDate(selectedDate, 'time');
+    }
+  };
 
   const handleSave = async () => {
     if (!userId) {
@@ -44,7 +81,7 @@ export default function TaskFormScreen() {
       title: title.trim(),
       notes: notes.trim() || undefined,
       completed: editingTask?.completed ?? false,
-      reminder: reminder.trim() || undefined,
+      reminder: reminderDate?.toISOString(),
       notificationId: editingTask?.notificationId,
       updatedAt: now,
       synced: false,
@@ -55,7 +92,8 @@ export default function TaskFormScreen() {
   };
 
   return (
-    <ThemedView style={styles.page}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <ThemedView style={styles.page}>
       <ThemedText type="title">{editingTask ? 'Edit Task' : 'New Task'}</ThemedText>
 
       <View style={styles.field}>
@@ -83,14 +121,25 @@ export default function TaskFormScreen() {
 
       <View style={styles.field}>
         <ThemedText type="subtitle">Reminder</ThemedText>
-        <TextInput
-          style={styles.input}
-          placeholder="YYYY-MM-DD HH:mm"
-          placeholderTextColor="#7a7f85"
-          value={reminder}
-          onChangeText={setReminder}
-        />
-        <ThemedText>Example: {format(new Date(), 'yyyy-MM-dd HH:mm')}</ThemedText>
+        <View style={styles.reminderActions}>
+          <Pressable style={styles.reminderButton} onPress={() => setShowDatePicker(true)}>
+            <ThemedText>{reminderDate ? format(reminderDate, 'PPP') : 'Select date'}</ThemedText>
+          </Pressable>
+          <Pressable style={styles.reminderButton} onPress={() => setShowTimePicker(true)}>
+            <ThemedText>{reminderDate ? format(reminderDate, 'p') : 'Select time'}</ThemedText>
+          </Pressable>
+        </View>
+        {reminderDate ? (
+          <Pressable style={styles.clearReminderButton} onPress={() => setReminderDate(null)}>
+            <ThemedText style={styles.clearReminderText}>Clear reminder</ThemedText>
+          </Pressable>
+        ) : null}
+        {showDatePicker ? (
+          <DateTimePicker value={reminderDate ?? new Date()} mode="date" onChange={onDateChange} />
+        ) : null}
+        {showTimePicker ? (
+          <DateTimePicker value={reminderDate ?? new Date()} mode="time" onChange={onTimeChange} />
+        ) : null}
       </View>
 
       <Pressable style={styles.saveButton} onPress={handleSave}>
@@ -99,11 +148,15 @@ export default function TaskFormScreen() {
       <Pressable style={styles.cancelButton} onPress={() => router.back()}>
         <ThemedText>Cancel</ThemedText>
       </Pressable>
-    </ThemedView>
+      </ThemedView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
   page: {
     flex: 1,
     padding: 16,
@@ -123,6 +176,24 @@ const styles = StyleSheet.create({
   multiline: {
     minHeight: 100,
     textAlignVertical: 'top',
+  },
+  reminderActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  reminderButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#cbd5e0',
+    backgroundColor: '#fff',
+  },
+  clearReminderButton: {
+    alignSelf: 'flex-start',
+  },
+  clearReminderText: {
+    color: '#d64545',
   },
   saveButton: {
     marginTop: 28,

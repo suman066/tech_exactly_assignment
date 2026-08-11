@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { Link, useRouter } from 'expo-router';
+import { Link } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAppDispatch, useAppSelector } from '../src/store/hooks';
 import { signInAsync } from '../src/store/authSlice';
@@ -8,46 +9,58 @@ import { ThemedText } from '../components/themed-text';
 import { ThemedView } from '../components/themed-view';
 
 export default function LoginScreen() {
-  const router = useRouter();
   const dispatch = useAppDispatch();
-  const { status, error, userId, initializing } = useAppSelector((state) => state.auth);
+  const { status, error } = useAppSelector((state) => state.auth);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-
-  if (userId && !initializing) {
-    router.replace('/');
-  }
+  const [formError, setFormError] = useState<string | null>(null);
 
   const onSignIn = () => {
-    dispatch(signInAsync({ email, password }));
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail || !password) {
+      setFormError('Enter your email address and password.');
+      return;
+    }
+
+    setFormError(null);
+    dispatch(signInAsync({ email: normalizedEmail, password }));
   };
 
   return (
-    <ThemedView style={styles.page}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <ThemedView style={styles.page}>
       <ThemedText type="title">Sign In</ThemedText>
+      <ThemedText style={styles.description}>Sign in to your own task list with the email you registered.</ThemedText>
       <View style={styles.field}>
+        <ThemedText type="defaultSemiBold">Email address</ThemedText>
         <TextInput
           style={styles.input}
           placeholder="Email"
           placeholderTextColor="#7a7f85"
           keyboardType="email-address"
           autoCapitalize="none"
+          autoComplete="email"
+          textContentType="emailAddress"
           value={email}
           onChangeText={setEmail}
         />
       </View>
       <View style={styles.field}>
+        <ThemedText type="defaultSemiBold">Password</ThemedText>
         <TextInput
           style={styles.input}
           placeholder="Password"
           placeholderTextColor="#7a7f85"
           secureTextEntry
+          autoComplete="current-password"
+          textContentType="password"
           value={password}
           onChangeText={setPassword}
         />
       </View>
-      {error ? <ThemedText style={styles.error}>{error}</ThemedText> : null}
-      <Pressable style={styles.button} onPress={onSignIn}>
+      {formError || error ? <ThemedText style={styles.error}>{formError ?? error}</ThemedText> : null}
+      <Pressable style={[styles.button, status === 'loading' && styles.buttonDisabled]} onPress={onSignIn} disabled={status === 'loading'}>
         {status === 'loading' ? <ActivityIndicator color="#fff" /> : <ThemedText type="defaultSemiBold">Continue</ThemedText>}
       </Pressable>
       <View style={styles.bottomText}>
@@ -56,11 +69,15 @@ export default function LoginScreen() {
           <ThemedText type="link">Sign Up</ThemedText>
         </Link>
       </View>
-    </ThemedView>
+      </ThemedView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
   page: {
     flex: 1,
     padding: 20,
@@ -69,7 +86,12 @@ const styles = StyleSheet.create({
   field: {
     marginVertical: 10,
   },
+  description: {
+    marginTop: 8,
+    color: '#667085',
+  },
   input: {
+    marginTop: 6,
     padding: 14,
     borderRadius: 14,
     borderWidth: 1,
@@ -82,6 +104,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: '#0a7ea4',
     alignItems: 'center',
+  },
+  buttonDisabled: {
+    opacity: 0.65,
   },
   bottomText: {
     marginTop: 16,

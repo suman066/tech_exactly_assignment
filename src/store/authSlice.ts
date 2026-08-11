@@ -12,6 +12,7 @@ import type { UserProfile } from '../types';
 export interface AuthState {
   userId: string | null;
   email: string | null;
+  pushToken: string | null;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
   initializing: boolean;
@@ -20,6 +21,7 @@ export interface AuthState {
 const initialState: AuthState = {
   userId: null,
   email: null,
+  pushToken: null,
   status: 'idle',
   error: null,
   initializing: true,
@@ -64,9 +66,13 @@ const authSlice = createSlice({
     setUser(state, action: PayloadAction<UserProfile | null>) {
       state.userId = action.payload?.userId ?? null;
       state.email = action.payload?.email ?? null;
+      // keep existing pushToken value; user changes shouldn't clear it
       state.initializing = false;
       state.error = null;
       state.status = 'succeeded';
+    },
+    setPushToken(state, action: PayloadAction<string | null>) {
+      state.pushToken = action.payload;
     },
     clearUser(state) {
       state.userId = null;
@@ -131,6 +137,6 @@ const authSlice = createSlice({
   },
 });
 
-export const { setUser, clearUser, setError, finishInitializing } = authSlice.actions;
+export const { setUser, setPushToken, clearUser, setError, finishInitializing } = authSlice.actions;
 
 export default authSlice.reducer;

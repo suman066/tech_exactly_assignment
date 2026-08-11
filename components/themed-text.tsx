@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   link: {
-    lineHeight: 30,
+    lineHeight: 24,
     fontSize: 16,
     color: '#0a7ea4',
   },
